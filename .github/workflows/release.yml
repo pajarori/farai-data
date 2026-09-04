@@ -1,0 +1,35 @@
+name: release farai data
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: content version
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: pajarori/farai
+          path: farai-source
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install farai source
+        run: bun install --frozen-lockfile --cwd farai-source
+      - name: build artifacts
+        env:
+          FARAI_SOURCE_DIR: ${{ github.workspace }}/farai-source
+        run: ./scripts/build-release.sh "${{ inputs.version }}"
+      - name: publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ inputs.version }}" dist/manifest.json dist/knowledge.db dist/skills.tar.gz dist/checksums.txt --title "${{ inputs.version }}" --notes "farai data ${{ inputs.version }}"

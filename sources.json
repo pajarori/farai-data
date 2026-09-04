@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "hacktricks",
+      "url": "https://github.com/HackTricks-wiki/hacktricks",
+      "license": "cc-by-sa-4.0",
+      "attribution": "P0cL4bs and contributors"
+    },
+    {
+      "id": "payloadsallthethings",
+      "url": "https://github.com/swisskyrepo/PayloadsAllTheThings",
+      "license": "mit",
+      "attribution": "swisskyrepo and contributors"
+    },
+    {
+      "id": "owasp",
+      "url": "https://owasp.org/www-project-web-security-testing-guide/",
+      "license": "cc-by-sa-4.0",
+      "attribution": "owasp foundation and contributors"
+    }
+  ]
+}

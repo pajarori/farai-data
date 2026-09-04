@@ -1,0 +1,6 @@
+*.db
+*.db-*
+*.tar.gz
+checksums.txt
+dist/
+node_modules/
