@@ -1,7 +1,14 @@
 name: release farai data
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: farai-data-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -22,19 +29,25 @@ jobs:
         run: bun install --frozen-lockfile --cwd farai-source
       - name: choose release version
         id: version
-        run: echo "version=$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+        run: echo "version=git-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: build artifacts
         env:
           FARAI_SOURCE_DIR: ${{ github.workspace }}/farai-source
-        run: ./scripts/build-release.sh "${{ steps.version.outputs.version }}"
-      - name: publish release
+        run: ./scripts/build-release.sh "${GITHUB_SHA}" "${{ steps.version.outputs.version }}"
+      - name: publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.version.outputs.version }}"
           assets=(dist/manifest.json dist/knowledge.db dist/skills.tar.gz dist/checksums.txt)
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" "${assets[@]}" --clobber
+          gh release create "${tag}" "${assets[@]}" --title "${tag}" --notes "farai data commit ${GITHUB_SHA}"
+      - name: publish latest pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest dist/manifest.json dist/checksums.txt --clobber
+            gh release edit latest --title "farai data latest" --notes "points to ${GITHUB_SHA}"
           else
-            gh release create "${tag}" "${assets[@]}" --title "${tag}" --notes "farai data ${tag}"
+            gh release create latest dist/manifest.json dist/checksums.txt --title "farai data latest" --notes "points to ${GITHUB_SHA}"
           fi

@@ -8,6 +8,7 @@
     "schemaVersion": { "type": "integer", "const": 1 },
     "contentVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "sourceCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "minFaraiVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "releaseNotes": { "type": "string", "maxLength": 4096 },
     "knowledge": { "$ref": "#/$defs/artifact" },

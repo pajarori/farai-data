@@ -4,20 +4,44 @@
     {
       "id": "hacktricks",
       "url": "https://github.com/HackTricks-wiki/hacktricks",
-      "license": "cc-by-sa-4.0",
-      "attribution": "P0cL4bs and contributors"
+      "license": "CC-BY-NC-4.0",
+      "attribution": "Carlos Polop and HackTricks contributors"
     },
     {
       "id": "payloadsallthethings",
       "url": "https://github.com/swisskyrepo/PayloadsAllTheThings",
-      "license": "mit",
-      "attribution": "swisskyrepo and contributors"
+      "license": "MIT",
+      "attribution": "Swissky and PayloadsAllTheThings contributors"
     },
     {
-      "id": "owasp",
-      "url": "https://owasp.org/www-project-web-security-testing-guide/",
-      "license": "cc-by-sa-4.0",
-      "attribution": "owasp foundation and contributors"
+      "id": "attack",
+      "url": "https://github.com/mitre-attack/attack-stix-data",
+      "license": "MITRE ATT&CK Terms of Use",
+      "attribution": "The MITRE Corporation"
+    },
+    {
+      "id": "cwe",
+      "url": "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip",
+      "license": "MITRE CWE Terms of Use",
+      "attribution": "The MITRE Corporation"
+    },
+    {
+      "id": "capec",
+      "url": "https://capec.mitre.org/data/xml/capec_latest.xml",
+      "license": "MITRE CAPEC Terms of Use",
+      "attribution": "The MITRE Corporation"
+    },
+    {
+      "id": "kev",
+      "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+      "license": "United States government work",
+      "attribution": "Cybersecurity and Infrastructure Security Agency"
+    },
+    {
+      "id": "epss",
+      "url": "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz",
+      "license": "FIRST EPSS terms",
+      "attribution": "Forum of Incident Response and Security Teams"
     }
   ]
 }

@@ -1,15 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:-${CONTENT_VERSION:-}}"
-if [[ -z "${version}" ]]; then
-  version="$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER:-$(date -u +%H%M%S)}"
+source_commit="${1:-${CONTENT_SOURCE_COMMIT:-${GITHUB_SHA:-}}}"
+if [[ -z "${source_commit}" ]]; then
+  source_commit="$(git rev-parse HEAD)"
+fi
+if [[ ! "${source_commit}" =~ ^[a-f0-9]{40}$ ]]; then
+  echo "source commit must be a full 40-character git sha: ${source_commit}" >&2
+  exit 1
+fi
+version="${2:-${CONTENT_VERSION:-git-${source_commit}}}"
+if [[ ! "${version}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+  echo "content version contains unsupported characters: ${version}" >&2
+  exit 1
 fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
 farai_root="${FARAI_SOURCE_DIR:-${root}/../farai}"
 out="${root}/dist"
 content_home="${FARAI_HOME:-$(mktemp -d)}"
 mkdir -p "${out}"
+
+checked_out_commit="$(git -C "${root}" rev-parse HEAD)"
+if [[ "${source_commit}" != "${checked_out_commit}" ]]; then
+  echo "source commit does not match the checked-out farai-data commit: ${source_commit} != ${checked_out_commit}" >&2
+  exit 1
+fi
 
 if [[ ! -f "${farai_root}/package.json" ]]; then
   echo "farai source tree not found: ${farai_root}" >&2
@@ -23,7 +38,15 @@ if [[ ! -f "${db}" ]]; then
   exit 1
 fi
 cp "${db}" "${out}/knowledge.db"
-tar -czf "${out}/skills.tar.gz" -C "${farai_root}/src/agent-skills/library" .
+if [[ ! -d "${root}/skills" ]]; then
+  echo "content skills directory not found: ${root}/skills" >&2
+  exit 1
+fi
+if ! find "${root}/skills" -type f -name SKILL.md -print -quit | grep -q .; then
+  echo "content skills directory has no SKILL.md files" >&2
+  exit 1
+fi
+tar -czf "${out}/skills.tar.gz" -C "${root}/skills" .
 
 if command -v sha256sum >/dev/null 2>&1; then
   sha256() { sha256sum "$1" | awk '{print $1}'; }
@@ -47,6 +70,7 @@ cat > "${out}/manifest.json" <<EOF
   "schemaVersion": 1,
   "contentVersion": "${version}",
   "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "sourceCommit": "${source_commit}",
   "knowledge": { "url": "https://github.com/pajarori/farai-data/releases/download/${version}/knowledge.db", "sha256": "${knowledge_sha}", "size": ${knowledge_size}, "schemaVersion": ${knowledge_schema} },
   "skills": { "url": "https://github.com/pajarori/farai-data/releases/download/${version}/skills.tar.gz", "sha256": "${skills_sha}", "size": ${skills_size} }
 }
