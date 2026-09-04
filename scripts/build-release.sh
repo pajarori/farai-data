@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:?content version is required}"
+version="${1:-${CONTENT_VERSION:-}}"
+if [[ -z "${version}" ]]; then
+  version="$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER:-$(date -u +%H%M%S)}"
+fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
 farai_root="${FARAI_SOURCE_DIR:-${root}/../farai}"
 out="${root}/dist"

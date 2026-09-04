@@ -2,11 +2,6 @@ name: release farai data
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: content version
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -25,11 +20,21 @@ jobs:
           bun-version: latest
       - name: install farai source
         run: bun install --frozen-lockfile --cwd farai-source
+      - name: choose release version
+        id: version
+        run: echo "version=$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
       - name: build artifacts
         env:
           FARAI_SOURCE_DIR: ${{ github.workspace }}/farai-source
-        run: ./scripts/build-release.sh "${{ inputs.version }}"
+        run: ./scripts/build-release.sh "${{ steps.version.outputs.version }}"
       - name: publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ inputs.version }}" dist/manifest.json dist/knowledge.db dist/skills.tar.gz dist/checksums.txt --title "${{ inputs.version }}" --notes "farai data ${{ inputs.version }}"
+        run: |
+          tag="${{ steps.version.outputs.version }}"
+          assets=(dist/manifest.json dist/knowledge.db dist/skills.tar.gz dist/checksums.txt)
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${assets[@]}" --clobber
+          else
+            gh release create "${tag}" "${assets[@]}" --title "${tag}" --notes "farai data ${tag}"
+          fi

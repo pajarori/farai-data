@@ -22,6 +22,8 @@ each release publishes these assets:
 
 the manifest carries sha256 and size for every artifact. farai downloads into a private staging directory, verifies all metadata, validates the sqlite database, then atomically activates the version.
 
+run the `release farai data` workflow from github actions without any inputs. it generates a unique content version from the utc date and workflow run number, builds the artifacts, and publishes the release automatically.
+
 ## local development
 
 set `FARAI_CONTENT_MANIFEST_URL` to a local `file://` manifest or an https URL. `FARAI_CONTENT_DIR` can point at a disposable content store while developing the updater.
