@@ -15,7 +15,6 @@ if [[ ! "${version}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
   exit 1
 fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
-farai_root="${FARAI_SOURCE_DIR:-${root}/../farai}"
 out="${root}/dist"
 content_home="${FARAI_HOME:-$(mktemp -d)}"
 mkdir -p "${out}"
@@ -26,12 +25,15 @@ if [[ "${source_commit}" != "${checked_out_commit}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${farai_root}/package.json" ]]; then
-  echo "farai source tree not found: ${farai_root}" >&2
+if [[ ! -f "${root}/builder/knowledge/cli.ts" ]]; then
+  echo "knowledge builder not found: ${root}/builder" >&2
   exit 1
 fi
 
-FARAI_HOME="${content_home}" bun run --cwd "${farai_root}" src/agent-knowledge/cli.ts build all
+if [[ -f "${root}/data/corpora.json" ]]; then
+  export FARAI_CORPORA_MANIFEST="${root}/data/corpora.json"
+fi
+FARAI_HOME="${content_home}" bun run --cwd "${root}/builder" knowledge/cli.ts build all
 db="${content_home}/knowledge.db"
 if [[ ! -f "${db}" ]]; then
   echo "knowledge database was not built at ${db}" >&2

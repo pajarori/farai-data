@@ -1,0 +1,8 @@
+{
+  "name": "farai-data-builder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run knowledge/cli.ts build all"
+  }
+}

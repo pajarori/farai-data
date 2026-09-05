@@ -1,0 +1,13 @@
+{
+  "corpora": [
+    {
+      "id": "ctf-writeups",
+      "file": "ctf-knowledge.jsonl",
+      "kind": "qa",
+      "category": "ctf",
+      "license": "MIT (CTFKnow dataset); per-record attribution",
+      "attribution": "CTFKnow dataset (MIT); underlying CTF writeup authors",
+      "sourceUrl": "https://github.com/tszdanger/CTFKnow"
+    }
+  ]
+}

@@ -42,6 +42,13 @@
       "url": "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz",
       "license": "FIRST EPSS terms",
       "attribution": "Forum of Incident Response and Security Teams"
+    },
+    {
+      "id": "ctf-writeups",
+      "url": "https://github.com/tszdanger/CTFKnow",
+      "license": "MIT (CTFKnow dataset)",
+      "attribution": "CTFKnow dataset (MIT); underlying CTF writeup authors",
+      "note": "distilled technique summaries from the MIT-licensed CTFKnow dataset; no verbatim third-party writeup text is shipped"
     }
   ]
 }
