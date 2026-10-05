@@ -14,36 +14,6 @@
       "attribution": "Swissky and PayloadsAllTheThings contributors"
     },
     {
-      "id": "attack",
-      "url": "https://github.com/mitre-attack/attack-stix-data",
-      "license": "MITRE ATT&CK Terms of Use",
-      "attribution": "The MITRE Corporation"
-    },
-    {
-      "id": "cwe",
-      "url": "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip",
-      "license": "MITRE CWE Terms of Use",
-      "attribution": "The MITRE Corporation"
-    },
-    {
-      "id": "capec",
-      "url": "https://capec.mitre.org/data/xml/capec_latest.xml",
-      "license": "MITRE CAPEC Terms of Use",
-      "attribution": "The MITRE Corporation"
-    },
-    {
-      "id": "kev",
-      "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
-      "license": "United States government work",
-      "attribution": "Cybersecurity and Infrastructure Security Agency"
-    },
-    {
-      "id": "epss",
-      "url": "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz",
-      "license": "FIRST EPSS terms",
-      "attribution": "Forum of Incident Response and Security Teams"
-    },
-    {
       "id": "ctf-writeups",
       "url": "https://github.com/tszdanger/CTFKnow",
       "license": "MIT (CTFKnow dataset)",

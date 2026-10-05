@@ -43,26 +43,12 @@ export type KnowledgeEntity = {
   value: string;
 };
 
-export type KnowledgeNode = {
-  id: string;
-  kind: KnowledgeEntityType;
-  name: string;
-  summary: string;
-  pin: string;
-};
-
-export type KnowledgeEdge = {
-  src: string;
-  rel: string;
-  dst: string;
-  authoritative: boolean;
-};
-
 export type KnowledgeSearchOptions = {
   category?: string;
   packs?: string[];
   mustTerms?: string[];
   limit?: number;
+  queryVector?: Float32Array;
 };
 
 export type KnowledgeHit = {
@@ -94,13 +80,6 @@ export type KnowledgeReadResult = {
   sourceHash?: string;
 };
 
-export type KnowledgeNeighbor = {
-  node: KnowledgeNode;
-  rel: string;
-  direction: "out" | "in";
-  authoritative: boolean;
-};
-
 export type KnowledgeStatus = {
   path: string;
   schemaVersion: number;
@@ -116,10 +95,7 @@ export type KnowledgeStatus = {
     builtAt: string;
   }>;
   records: number;
-  nodes: number;
-  edges: number;
-  taxonomies: Array<{ kind: KnowledgeEntityType; pin: string; nodes: number }>;
-  enrichment: { records: number; kevListed: number; epssScored: number; asOf?: string };
+  embeddings: number;
 };
 
 export type KnowledgeIntegrity = {
@@ -130,7 +106,4 @@ export type KnowledgeIntegrity = {
 export type KnowledgeQuery = {
   search: (query: string, options?: KnowledgeSearchOptions) => KnowledgeHit[];
   read: (recordId: string) => KnowledgeReadResult | undefined;
-  resolve: (name: string) => KnowledgeNode[];
-  neighbors: (nodeId: string, options?: { rel?: string; direction?: "out" | "in" }) => KnowledgeNeighbor[];
-  prioritize: (cve: string) => { cve: string; kevListed: boolean; kevDate?: string; ransomware?: string; epss?: number; epssPercentile?: number; asOf?: string } | undefined;
 };

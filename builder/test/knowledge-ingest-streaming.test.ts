@@ -1,11 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gzipSync } from "node:zlib";
 import { readBoundedResponseBytes, writeBoundedResponseToFile } from "../vendor/http-response";
 import { fetchZippedXml } from "../knowledge/ingest/zip-fetch";
-import { ingestEnrichment } from "../knowledge/ingest/enrichment";
 
 const originalFetch = globalThis.fetch;
 const originalFaraiHome = process.env.FARAI_HOME;
@@ -61,25 +59,4 @@ test("zipped xml ingestion streams the archive, validates metadata, and publishe
   expect(result.xml).toContain("Weakness_Catalog");
   expect(result.path).toBe(join(home, "knowledge-cache", "cwe-test", "cwe-test.xml"));
   expect(existsSync(result.path)).toBe(true);
-});
-
-test("enrichment ingestion streams gzip input and writes jsonl without retaining the csv source", async () => {
-  const directory = temporaryDirectory("farai-enrichment-");
-  process.env.FARAI_KNOWLEDGE_DIR = directory;
-  const kev = {
-    dateReleased: "2026-01-01",
-    vulnerabilities: [{ cveID: "CVE-2026-0001", dateAdded: "2026-01-01", knownRansomwareCampaignUse: "Known" }]
-  };
-  const epss = gzipSync("#model_version:v1\ncve,epss,percentile\nCVE-2026-0001,0.75,0.98\nCVE-2026-0002,0.10,0.50\n");
-  globalThis.fetch = (async (input: string | URL | Request) => {
-    const url = String(input);
-    return url.includes("known_exploited") ? Response.json(kev) : new Response(epss);
-  }) as unknown as typeof fetch;
-  const result = await ingestEnrichment();
-  expect(result.rows).toBe(2);
-  const output = readFileSync(join(directory, "enrichment", "enrichment.jsonl"), "utf8");
-  expect(output).toContain('"cve":"CVE-2026-0001"');
-  expect(output).toContain('"epss":0.75');
-  expect(output).toContain('"kevListed":false');
-  expect(readdirSync(join(directory, "enrichment")).some((entry) => entry.startsWith(".epss-"))).toBe(false);
 });

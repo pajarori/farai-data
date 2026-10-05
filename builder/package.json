@@ -4,5 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "bun run knowledge/cli.ts build all"
-  }
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.0"
+  },
+  "trustedDependencies": [
+    "onnxruntime-node",
+    "protobufjs"
+  ]
 }

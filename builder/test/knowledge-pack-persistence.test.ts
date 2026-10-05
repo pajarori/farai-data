@@ -3,7 +3,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listPacks, readEntities, readRecords, writePack } from "../knowledge/pack";
-import { listTaxonomies, readEdges, readNodes, writeTaxonomy } from "../knowledge/ingest/taxonomy-pack";
 import type { KnowledgePackMeta } from "../knowledge/types";
 
 const originalKnowledgeDir = process.env.FARAI_KNOWLEDGE_DIR;
@@ -23,22 +22,6 @@ test("knowledge packs stream private jsonl and round trip", () => {
   expect(readRecords(dir)).toEqual([{ id: "r1", query: "q", answer: "a" }]);
   expect(readEntities(dir)).toEqual([{ recordId: "r1", type: "cve", value: "CVE-2026-0001" }]);
   if (process.platform !== "win32") expect(statSync(join(dir, "records.jsonl")).mode & 0o777).toBe(0o600);
-});
-
-test("knowledge taxonomy streams private jsonl and round trips", () => {
-  const root = temporaryDirectory("farai-taxonomy-");
-  process.env.FARAI_KNOWLEDGE_DIR = root;
-  const dir = writeTaxonomy({
-    id: "demo",
-    sourceUrl: "https://example.test/demo",
-    pin: "1.0",
-    license: "MIT",
-    attribution: "demo",
-    retrievedAt: "2026-09-01T00:00:00.000Z"
-  }, [{ id: "CWE-1", kind: "cwe", name: "demo", summary: "summary", pin: "1.0" }], [{ src: "CWE-1", rel: "related", dst: "CWE-2", authoritative: true }]);
-  expect(listTaxonomies().map((taxonomy) => taxonomy.meta.id)).toEqual(["demo"]);
-  expect(readNodes(dir).map((node) => node.id)).toEqual(["CWE-1"]);
-  expect(readEdges(dir).map((edge) => edge.rel)).toEqual(["related"]);
 });
 
 test("knowledge persistence rejects a symlinked pack root", () => {

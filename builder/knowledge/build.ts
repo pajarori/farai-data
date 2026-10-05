@@ -6,8 +6,7 @@ import { ensurePrivateDirectory, ensurePrivateRegularFileIfExists, ensurePrivate
 import { KnowledgeStore } from "./store";
 import { legacyKnowledgeDbPath } from "./paths";
 import { latestPacks, readEntities, readRecords, type NormalizedRecord } from "./pack";
-import { latestTaxonomies, readEdges, readNodes } from "./ingest/taxonomy-pack";
-import { readEnrichment } from "./ingest/enrichment";
+import { embedPassage } from "./embedder";
 import type { KnowledgeEntity } from "./types";
 
 export type BuildResult = {
@@ -15,13 +14,11 @@ export type BuildResult = {
   packs: number;
   records: number;
   entities: number;
-  nodes: number;
-  edges: number;
-  prunedEdges: number;
+  embeddings: number;
   duplicateGroups: number;
 };
 
-export function buildKnowledgeDb(options: { only?: string[]; path?: string } = {}): BuildResult {
+export async function buildKnowledgeDb(options: { only?: string[]; path?: string } = {}): Promise<BuildResult> {
   const path = options.path ?? legacyKnowledgeDbPath();
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -31,56 +28,48 @@ export function buildKnowledgeDb(options: { only?: string[]; path?: string } = {
   const db = store.writable();
   const builtAt = new Date().toISOString();
   const packs = latestPacks().filter((pack) => !options.only?.length || options.only.includes(pack.meta.id));
-  const taxonomies = latestTaxonomies().filter((tax) => !options.only?.length || options.only.includes(tax.meta.id));
+
+  const loaded = packs.map((pack) => ({ pack, records: readRecords(pack.dir), entities: readEntities(pack.dir) }));
+  const embeddings = new Map<string, Float32Array>();
+  for (const entry of loaded) {
+    for (const record of entry.records) {
+      const vector = await embedPassage(passageText(record));
+      if (vector) embeddings.set(record.id, vector);
+    }
+  }
 
   let recordCount = 0;
   let entityCount = 0;
-  let nodeCount = 0;
-  let edgeCount = 0;
   const contentGroups = new Map<string, string[]>();
 
   try {
     db.transaction(() => {
-      for (const pack of packs) {
-        store.upsertPack(pack.meta, builtAt);
-        const records = readRecords(pack.dir);
-        const entities = readEntities(pack.dir);
-        const byRecord = groupEntities(entities);
-        for (const record of records) {
-          store.insertRecord(pack.meta.id, record);
+      for (const entry of loaded) {
+        store.upsertPack(entry.pack.meta, builtAt);
+        const byRecord = groupEntities(entry.entities);
+        for (const record of entry.records) {
+          store.insertRecord(entry.pack.meta.id, record);
           recordCount += 1;
           const recordEntities = byRecord.get(record.id);
           if (recordEntities?.length) {
             store.insertEntities(recordEntities);
             entityCount += recordEntities.length;
           }
+          const vector = embeddings.get(record.id);
+          if (vector) store.insertEmbedding(record.id, vector);
           trackDuplicate(contentGroups, record);
         }
       }
-      for (const tax of taxonomies) {
-        for (const node of readNodes(tax.dir)) {
-          store.upsertNode(node);
-          nodeCount += 1;
-        }
-        for (const edge of readEdges(tax.dir)) {
-          store.insertEdge(edge);
-          edgeCount += 1;
-        }
-      }
-      for (const row of readEnrichment()) store.upsertEnrichment(row);
       persistDuplicates(db, contentGroups);
     })();
 
-    const prunedEdges = Number((db.query("select count(*) as c from kb_edges e where not exists (select 1 from kb_nodes n where n.id = e.src) or not exists (select 1 from kb_nodes n where n.id = e.dst)").get() as { c?: number } | null)?.c ?? 0);
-    db.query("delete from kb_edges where not exists (select 1 from kb_nodes n where n.id = kb_edges.src) or not exists (select 1 from kb_nodes n where n.id = kb_edges.dst)").run();
     store.finalizeIndexes();
     const integrity = store.verifyIntegrity();
     if (!integrity.ok) throw new Error(`knowledge integrity failed: ${integrity.issues.map((issue) => `${issue.kind}=${issue.count}`).join(", ")}`);
     const duplicateGroups = [...contentGroups.values()].filter((ids) => ids.length > 1).length;
     const actualRecords = rowCount(db, "kb_records");
     const actualEntities = rowCount(db, "kb_entities");
-    const actualNodes = rowCount(db, "kb_nodes");
-    const actualEdges = rowCount(db, "kb_edges");
+    const actualEmbeddings = rowCount(db, "kb_embeddings");
     store.close();
     ensurePrivateSqlitePath(temporary, "staged knowledge database");
     rmSync(`${temporary}-wal`, { force: true });
@@ -89,7 +78,7 @@ export function buildKnowledgeDb(options: { only?: string[]; path?: string } = {
     renameSync(temporary, path);
     ensurePrivateRegularFileIfExists(path, "knowledge database");
     syncDirectory(dirname(path));
-    return { path, packs: packs.length, records: actualRecords, entities: actualEntities, nodes: actualNodes, edges: actualEdges, prunedEdges, duplicateGroups };
+    return { path, packs: packs.length, records: actualRecords, entities: actualEntities, embeddings: actualEmbeddings, duplicateGroups };
   } catch (error) {
     try { store.close(); } catch {}
     rmSync(temporary, { force: true });
@@ -98,6 +87,11 @@ export function buildKnowledgeDb(options: { only?: string[]; path?: string } = {
     rmSync(`${temporary}-journal`, { force: true });
     throw error;
   }
+}
+
+function passageText(record: NormalizedRecord): string {
+  const heading = record.headingPath?.length ? record.headingPath.join(" > ") : record.query;
+  return `${heading}\n${record.answer}`;
 }
 
 function rowCount(db: ReturnType<KnowledgeStore["writable"]>, table: string): number {

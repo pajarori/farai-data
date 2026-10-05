@@ -2,13 +2,11 @@ import { existsSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { ensurePrivateRegularFileIfExists, ensurePrivateSqlitePath } from "../vendor/private-path";
 import { KNOWLEDGE_SCHEMA_VERSION, migrateKnowledge, rebuildFtsIndexes } from "./schema";
+import { encodeVector } from "./embedder";
 import type {
-  KnowledgeEdge,
   KnowledgeEntity,
   KnowledgeHit,
   KnowledgeIntegrity,
-  KnowledgeNeighbor,
-  KnowledgeNode,
   KnowledgePackMeta,
   KnowledgeQuery,
   KnowledgeReadResult,
@@ -155,55 +153,6 @@ export class KnowledgeStore implements KnowledgeQuery {
     };
   }
 
-  resolve(name: string): KnowledgeNode[] {
-    const needle = name.trim();
-    if (!needle) return [];
-    const db = this.database();
-    const byId = db.query("select * from kb_nodes where id = $id").all({ $id: needle.toUpperCase() }) as Row[];
-    if (byId.length) return byId.map(nodeFromRow);
-    const like = `%${needle.toLowerCase()}%`;
-    const rows = db.query(
-      `select * from kb_nodes where lower(name) like $like or lower(id) like $like
-       order by case when lower(name) = $exact then 0 else 1 end, length(name), id limit 20`
-    ).all({ $like: like, $exact: needle.toLowerCase() }) as Row[];
-    return rows.map(nodeFromRow);
-  }
-
-  neighbors(nodeId: string, options: { rel?: string; direction?: "out" | "in" } = {}): KnowledgeNeighbor[] {
-    const db = this.database();
-    const id = nodeId.toUpperCase();
-    const output: KnowledgeNeighbor[] = [];
-    if (options.direction !== "in") {
-      const rows = db.query(
-        `select e.rel, e.authoritative, n.* from kb_edges e join kb_nodes n on n.id = e.dst
-         where e.src = $id ${options.rel ? "and e.rel = $rel" : ""} order by e.rel, n.id limit 100`
-      ).all(options.rel ? { $id: id, $rel: options.rel } : { $id: id }) as Row[];
-      for (const row of rows) output.push({ node: nodeFromRow(row), rel: String(row.rel), direction: "out", authoritative: Number(row.authoritative) === 1 });
-    }
-    if (options.direction !== "out") {
-      const rows = db.query(
-        `select e.rel, e.authoritative, n.* from kb_edges e join kb_nodes n on n.id = e.src
-         where e.dst = $id ${options.rel ? "and e.rel = $rel" : ""} order by e.rel, n.id limit 100`
-      ).all(options.rel ? { $id: id, $rel: options.rel } : { $id: id }) as Row[];
-      for (const row of rows) output.push({ node: nodeFromRow(row), rel: String(row.rel), direction: "in", authoritative: Number(row.authoritative) === 1 });
-    }
-    return output;
-  }
-
-  prioritize(cve: string): { cve: string; kevListed: boolean; kevDate?: string; ransomware?: string; epss?: number; epssPercentile?: number; asOf?: string } | undefined {
-    const row = this.database().query("select * from kb_enrichment where cve = $cve").get({ $cve: cve.toUpperCase() }) as Row | null;
-    if (!row) return undefined;
-    return {
-      cve: String(row.cve),
-      kevListed: Number(row.kev_listed) === 1,
-      ...(typeof row.kev_date === "string" ? { kevDate: row.kev_date } : {}),
-      ...(typeof row.ransomware === "string" ? { ransomware: row.ransomware } : {}),
-      ...(typeof row.epss === "number" ? { epss: row.epss } : {}),
-      ...(typeof row.epss_pct === "number" ? { epssPercentile: row.epss_pct } : {}),
-      ...(typeof row.as_of === "string" ? { asOf: row.as_of } : {})
-    };
-  }
-
   status(): KnowledgeStatus {
     const db = this.database();
     const packs = (db.query(
@@ -220,32 +169,15 @@ export class KnowledgeStore implements KnowledgeQuery {
       builtAt: String(row.built_at)
     }));
     const records = count(db, "select count(*) as c from kb_records");
-    const nodes = count(db, "select count(*) as c from kb_nodes");
-    const edges = count(db, "select count(*) as c from kb_edges");
-    const taxonomies = (db.query(
-      "select kind, pin, count(*) as node_count from kb_nodes group by kind, pin order by kind, pin"
-    ).all() as Row[]).map((row) => ({
-      kind: row.kind as KnowledgeNode["kind"],
-      pin: String(row.pin),
-      nodes: Number(row.node_count)
-    }));
-    const enrichmentRow = db.query(
-      "select count(*) as records, sum(case when kev_listed = 1 then 1 else 0 end) as kev_listed, count(epss) as epss_scored, max(as_of) as as_of from kb_enrichment"
-    ).get() as Row | null;
-    const enrichment = {
-      records: Number(enrichmentRow?.records ?? 0),
-      kevListed: Number(enrichmentRow?.kev_listed ?? 0),
-      epssScored: Number(enrichmentRow?.epss_scored ?? 0),
-      ...(typeof enrichmentRow?.as_of === "string" && enrichmentRow.as_of ? { asOf: enrichmentRow.as_of } : {})
-    };
-    return { path: this.path, schemaVersion: KNOWLEDGE_SCHEMA_VERSION, packs, records, nodes, edges, taxonomies, enrichment };
+    const embeddings = count(db, "select count(*) as c from kb_embeddings");
+    return { path: this.path, schemaVersion: KNOWLEDGE_SCHEMA_VERSION, packs, records, embeddings };
   }
 
   verifyIntegrity(): KnowledgeIntegrity {
     const db = this.database();
     const checks: Array<{ kind: string; sql: string }> = [
-      { kind: "orphan_edges", sql: "select count(*) as c from kb_edges e where not exists (select 1 from kb_nodes n where n.id = e.src) or not exists (select 1 from kb_nodes n where n.id = e.dst)" },
       { kind: "orphan_entities", sql: "select count(*) as c from kb_entities e where not exists (select 1 from kb_records r where r.id = e.record_id)" },
+      { kind: "orphan_embeddings", sql: "select count(*) as c from kb_embeddings e where not exists (select 1 from kb_records r where r.id = e.record_id)" },
       { kind: "orphan_records", sql: "select count(*) as c from kb_records r where not exists (select 1 from kb_packs p where p.id = r.pack)" },
       { kind: "missing_source_hash", sql: "select count(*) as c from kb_records where source_hash is null or source_hash = ''" },
       { kind: "fts_count_mismatch", sql: "select abs((select count(*) from kb_records) - (select count(*) from kb_records_fts)) as c" }
@@ -286,6 +218,7 @@ export class KnowledgeStore implements KnowledgeQuery {
     const db = this.writable();
     db.query("delete from kb_dupe_groups where record_id in (select id from kb_records where pack = $pack)").run({ $pack: packId });
     db.query("delete from kb_entities where record_id in (select id from kb_records where pack = $pack)").run({ $pack: packId });
+    db.query("delete from kb_embeddings where record_id in (select id from kb_records where pack = $pack)").run({ $pack: packId });
     db.query("delete from kb_records where pack = $pack").run({ $pack: packId });
   }
 
@@ -317,33 +250,11 @@ export class KnowledgeStore implements KnowledgeQuery {
     for (const entity of entities) insert.run({ $record_id: entity.recordId, $type: entity.type, $value: entity.value });
   }
 
-  upsertNode(node: KnowledgeNode): void {
+  insertEmbedding(recordId: string, vector: Float32Array): void {
     this.writable().query(
-      `insert into kb_nodes (id, kind, name, summary, pin) values ($id, $kind, $name, $summary, $pin)
-       on conflict(id) do update set kind=excluded.kind, name=excluded.name, summary=excluded.summary, pin=excluded.pin`
-    ).run({ $id: node.id, $kind: node.kind, $name: node.name, $summary: node.summary, $pin: node.pin });
-  }
-
-  insertEdge(edge: KnowledgeEdge): void {
-    this.writable().query("insert into kb_edges (src, rel, dst, authoritative) values ($src, $rel, $dst, $authoritative) on conflict do nothing")
-      .run({ $src: edge.src, $rel: edge.rel, $dst: edge.dst, $authoritative: edge.authoritative ? 1 : 0 });
-  }
-
-  upsertEnrichment(row: { cve: string; kevListed: boolean; kevDate?: string; ransomware?: string; epss?: number; epssPct?: number; asOf?: string }): void {
-    this.writable().query(
-      `insert into kb_enrichment (cve, kev_listed, kev_date, ransomware, epss, epss_pct, as_of)
-       values ($cve, $kev_listed, $kev_date, $ransomware, $epss, $epss_pct, $as_of)
-       on conflict(cve) do update set kev_listed=excluded.kev_listed, kev_date=excluded.kev_date,
-         ransomware=excluded.ransomware, epss=excluded.epss, epss_pct=excluded.epss_pct, as_of=excluded.as_of`
-    ).run({
-      $cve: row.cve.toUpperCase(),
-      $kev_listed: row.kevListed ? 1 : 0,
-      $kev_date: row.kevDate ?? null,
-      $ransomware: row.ransomware ?? null,
-      $epss: row.epss ?? null,
-      $epss_pct: row.epssPct ?? null,
-      $as_of: row.asOf ?? null
-    });
+      `insert into kb_embeddings (record_id, vector, dim) values ($record_id, $vector, $dim)
+       on conflict(record_id) do update set vector=excluded.vector, dim=excluded.dim`
+    ).run({ $record_id: recordId, $vector: encodeVector(vector), $dim: vector.length });
   }
 
   finalizeIndexes(): void {
@@ -480,16 +391,6 @@ function headingOf(row: Row): string {
 function snippet(body: string, max: number): string {
   const clean = body.replace(/\s+/g, " ").trim();
   return clean.length <= max ? clean : `${clean.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
-}
-
-function nodeFromRow(row: Row): KnowledgeNode {
-  return {
-    id: String(row.id),
-    kind: row.kind as KnowledgeNode["kind"],
-    name: String(row.name),
-    summary: String(row.summary),
-    pin: String(row.pin)
-  };
 }
 
 function count(db: Database, sql: string): number {
